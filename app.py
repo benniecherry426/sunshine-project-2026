@@ -1,1 +1,226 @@
-import streamlit as st\nimport os\nfrom dotenv import load_dotenv\nfrom modules.speech_handler import SpeechHandler\nfrom modules.document_processor import DocumentProcessor\nfrom modules.data_manager import DataManager\nfrom modules.visualization import Visualization\nimport openai\n\n# Load environment variables\nload_dotenv()\n\n# Set OpenAI API key\nopenai.api_key = os.getenv("OPENAI_API_KEY")\n\n# Page configuration\nst.set_page_config(\n    page_title="Sunshine Project 2026",\n    page_icon="☀️",\n    layout="wide",\n    initial_sidebar_state="expanded"\n)\n\n# Initialize session state\nif "messages" not in st.session_state:\n    st.session_state.messages = []\nif "spreadsheet_data" not in st.session_state:\n    st.session_state.spreadsheet_data = {}\nif "categories" not in st.session_state:\n    st.session_state.categories = []\n\n# Initialize modules\nspeech_handler = SpeechHandler()\ndocument_processor = DocumentProcessor()\ndata_manager = DataManager()\nvisualization = Visualization()\n\n# Header\nst.title("☀️ Sunshine Project 2026")\nst.subtitle("Your Intelligent Accountant AI Chatbot")\n\n# Sidebar\nwith st.sidebar:\n    st.header("Settings")\n    mode = st.radio("Select Mode:", ["Chat", "Upload Documents", "Manage Spreadsheet", "View Dashboard"])\n    \n    if st.button("🎤 Start Voice Input"):\n        st.session_state.voice_active = True\n        st.success("Voice input activated!")\n\n# Main content\nif mode == "Chat":\n    st.header("💬 Chat with Your AI Accountant")\n    \n    # Chat interface\n    for message in st.session_state.messages:\n        with st.chat_message(message["role"]):\n            st.write(message["content"])\n    \n    # User input\n    col1, col2 = st.columns([4, 1])\n    with col1:\n        user_input = st.text_input("Type your message or transaction...", placeholder="e.g., I spent $60 on phone bill")\n    with col2:\n        if st.button("Send"):\n            if user_input:\n                st.session_state.messages.append({"role": "user", "content": user_input})\n                \n                # Get AI response\n                response = openai.ChatCompletion.create(\n                    model="gpt-4-turbo",\n                    messages=[{"role": "user", "content": user_input}]\n                )\n                \n                ai_message = response.choices[0].message.content\n                st.session_state.messages.append({"role": "assistant", "content": ai_message})\n                \n                # Text-to-speech\n                speech_handler.text_to_speech(ai_message)\n                st.rerun()\n\nelif mode == "Upload Documents":\n    st.header("📄 Upload Financial Documents")\n    \n    uploaded_file = st.file_uploader("Upload PDF, image, or document", type=["pdf", "jpg", "png", "xlsx", "csv"])\n    \n    if uploaded_file:\n        st.write(f"File uploaded: {uploaded_file.name}")\n        \n        # Process document\n        extracted_data = document_processor.process_document(uploaded_file)\n        st.write("Extracted Data:", extracted_data)\n        \n        # Ask for category\n        category = st.text_input("What category is this? (e.g., Utilities, Travel, Office Supplies)")\n        \n        if category and st.button("Save to Spreadsheet"):\n            data_manager.add_transaction(category, extracted_data)\n            st.success(f"Data saved under '{category}'!")\n\nelif mode == "Manage Spreadsheet":\n    st.header("📊 Financial Spreadsheet")\n    \n    # Add category\n    new_category = st.text_input("Add new category:")\n    if st.button("Create Category"):\n        if new_category:\n            st.session_state.categories.append(new_category)\n            st.success(f"Category '{new_category}' created!")\n    \n    # Display spreadsheet\n    if st.session_state.categories:\n        selected_category = st.selectbox("Select category to view:", st.session_state.categories)\n        st.dataframe(data_manager.get_category_data(selected_category))\n\nelif mode == "View Dashboard":\n    st.header("📈 Financial Dashboard")\n    \n    # Generate visualizations\n    col1, col2 = st.columns(2)\n    \n    with col1:\n        st.subheader("Spending by Category")\n        chart = visualization.create_pie_chart(data_manager.get_all_data())\n        st.plotly_chart(chart)\n    \n    with col2:\n        st.subheader("Monthly Trends")\n        chart = visualization.create_line_chart(data_manager.get_all_data())\n        st.plotly_chart(chart)\n\nst.divider()\nst.caption("Sunshine Project 2026 - Powered by OpenAI & Streamlit")\n
+import streamlit as st
+import json
+from modules.speech_handler import SpeechHandler
+from modules.document_processor import DocumentProcessor
+from modules.data_manager import DataManager
+from modules.visualization import Visualization
+from config import APP_TITLE, APP_DESCRIPTION
+
+# Page configuration
+st.set_page_config(
+    page_title=APP_TITLE,
+    page_icon="☀️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Initialize session state
+if 'speech_handler' not in st.session_state:
+    st.session_state.speech_handler = SpeechHandler()
+if 'doc_processor' not in st.session_state:
+    st.session_state.doc_processor = DocumentProcessor()
+if 'data_manager' not in st.session_state:
+    st.session_state.data_manager = DataManager()
+if 'visualization' not in st.session_state:
+    st.session_state.visualization = Visualization()
+
+# Header
+st.title("☀️ Sunshine Project 2026")
+st.subheader("Accountant AI Chatbot")
+st.write(APP_DESCRIPTION)
+
+# Sidebar navigation
+with st.sidebar:
+    st.title("Navigation")
+    page = st.radio("Select a module:", [
+        "🏠 Home",
+        "🎤 Voice Input",
+        "📄 Document Upload",
+        "📊 Data Management",
+        "📈 Visualization",
+        "ℹ️ About"
+    ])
+
+# Pages
+if page == "🏠 Home":
+    st.info("Welcome to Sunshine Project 2026! Select a module from the sidebar to get started.")
+    
+    st.markdown("""
+    ## Features:
+    - 🎤 **Voice Input**: Speak naturally to input financial data
+    - 📄 **Document Processing**: Upload receipts, invoices, and financial documents
+    - 📊 **Data Management**: Create spreadsheets and organize financial data
+    - 📈 **Visualization**: Create charts and dashboards from your data
+    - 🤖 **AI Analysis**: Intelligent processing using OpenAI API
+    """)
+
+elif page == "🎤 Voice Input":
+    st.subheader("Voice Input Module")
+    st.write("Speak to input financial data naturally. For example: 'I spent 60 dollars for phone bill'")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🎤 Start Listening", key="voice_button"):
+            st.session_state.speech_handler.speak("I'm listening. Please tell me about your expense.")
+            voice_text = st.session_state.speech_handler.process_voice_input()
+            
+            if voice_text:
+                st.success(f"Transcribed: {voice_text}")
+                st.session_state.last_voice_input = voice_text
+                
+                # Ask for description
+                description = st.text_area("Describe this transaction:", value=voice_text)
+                category = st.selectbox("Select category:", ["Utilities", "Travel", "Office Supplies", "Meals", "Other"])
+                
+                if st.button("Save Transaction"):
+                    st.success(f"✅ Saved: {description} ({category})")
+                    st.session_state.speech_handler.speak("Transaction saved successfully!")
+
+elif page == "📄 Document Upload":
+    st.subheader("Document Upload Module")
+    st.write("Upload financial documents, receipts, or invoices")
+    
+    uploaded_file = st.file_uploader("Choose a file", type=['pdf', 'txt', 'docx', 'xlsx', 'csv', 'png', 'jpg', 'jpeg'])
+    
+    if uploaded_file is not None:
+        st.info(f"📁 Processing: {uploaded_file.name}")
+        
+        # Process the file
+        content = st.session_state.doc_processor.process_uploaded_file(uploaded_file)
+        
+        if content:
+            st.success("✅ File processed successfully!")
+            st.text_area("Extracted Content:", value=content, height=200)
+            
+            # Ask for description
+            description = st.text_area("Provide a description of this document:")
+            
+            if st.button("Analyze with AI"):
+                st.session_state.speech_handler.speak("Analyzing your document")
+                analysis = st.session_state.doc_processor.analyze_with_ai(
+                    content,
+                    f"Extract financial information and categorize it. Description: {description}"
+                )
+                
+                if analysis:
+                    st.subheader("AI Analysis Results:")
+                    st.write(analysis)
+
+elif page == "📊 Data Management":
+    st.subheader("Data Management Module")
+    
+    tab1, tab2, tab3 = st.tabs(["Create Spreadsheet", "Add Data", "View Data"])
+    
+    with tab1:
+        st.write("Create a new spreadsheet with custom categories")
+        
+        spreadsheet_name = st.text_input("Spreadsheet Name:", "Financial_Data")
+        
+        # Get category names from user
+        st.write("**Define Categories:** (Enter category names separated by commas)")
+        categories_input = st.text_input("Categories:", "Income,Utilities,Travel,Food,Office Supplies,Entertainment,Other")
+        categories = [cat.strip() for cat in categories_input.split(",")]
+        
+        if st.button("✅ Create Spreadsheet"):
+            st.session_state.data_manager.create_spreadsheet(spreadsheet_name, categories)
+            st.session_state.speech_handler.speak(f"Spreadsheet {spreadsheet_name} has been created successfully!")
+    
+    with tab2:
+        st.write("Add data to existing spreadsheet")
+        
+        spreadsheets = st.session_state.data_manager.list_spreadsheets()
+        
+        if spreadsheets:
+            selected_sheet = st.selectbox("Select Spreadsheet:", spreadsheets)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                date = st.date_input("Date:")
+            with col2:
+                description = st.text_input("Description:")
+            with col3:
+                amount = st.number_input("Amount:", min_value=0.0, step=0.01)
+            
+            category = st.selectbox("Category:", ["Income", "Utilities", "Travel", "Food", "Office Supplies", "Entertainment", "Other"])
+            
+            if st.button("➕ Add Data"):
+                st.success("✅ Data added successfully!")
+        else:
+            st.warning("No spreadsheets found. Create one first!")
+    
+    with tab3:
+        st.write("View data from spreadsheets")
+        
+        spreadsheets = st.session_state.data_manager.list_spreadsheets()
+        
+        if spreadsheets:
+            selected_sheet = st.selectbox("Select Spreadsheet:", spreadsheets, key="view_sheet")
+            
+            if st.button("📊 Load Data"):
+                file_path = f"spreadsheets/{selected_sheet}"
+                data = st.session_state.data_manager.get_spreadsheet_data(file_path)
+                
+                if data is not None:
+                    st.dataframe(data, use_container_width=True)
+        else:
+            st.warning("No spreadsheets found.")
+
+elif page == "📈 Visualization":
+    st.subheader("Visualization Module")
+    
+    spreadsheets = st.session_state.data_manager.list_spreadsheets()
+    
+    if spreadsheets:
+        selected_sheet = st.selectbox("Select Spreadsheet:", spreadsheets)
+        file_path = f"spreadsheets/{selected_sheet}"
+        data = st.session_state.data_manager.get_spreadsheet_data(file_path)
+        
+        if data is not None:
+            chart_type = st.selectbox("Select Chart Type:", ["Pie Chart", "Bar Chart", "Line Chart", "Dashboard"])
+            
+            if chart_type == "Pie Chart":
+                st.session_state.visualization.create_pie_chart(data, "Category", "Amount", "Expense Distribution")
+            
+            elif chart_type == "Bar Chart":
+                st.session_state.visualization.create_bar_chart(data, "Category", "Amount", "Expenses by Category")
+            
+            elif chart_type == "Line Chart":
+                if "Date" in data.columns:
+                    st.session_state.visualization.create_line_chart(data, "Date", "Amount", "Spending Trend")
+                else:
+                    st.warning("Date column required for line chart")
+            
+            elif chart_type == "Dashboard":
+                st.session_state.visualization.create_dashboard(data)
+    else:
+        st.warning("No spreadsheets found. Create one first!")
+
+elif page == "ℹ️ About":
+    st.subheader("About Sunshine Project 2026")
+    st.markdown("""
+    **Sunshine Project 2026** is an intelligent AI-powered accountant chatbot designed to help you manage your finances efficiently.
+    
+    ### Features:
+    - 🎤 **Natural Language Processing**: Speak naturally to input financial data
+    - 📄 **Document Recognition**: Extract data from receipts, invoices, and financial documents
+    - 🤖 **AI Analysis**: Powered by OpenAI's GPT-4
+    - 📊 **Data Organization**: Automatic spreadsheet creation and management
+    - 📈 **Visualization**: Beautiful charts and dashboards
+    
+    ### Technology Stack:
+    - **Streamlit** - Web application framework
+    - **OpenAI API** - AI analysis and understanding
+    - **Python** - Backend programming
+    - **Pandas & Openpyxl** - Data management
+    - **Matplotlib & Seaborn** - Visualization
+    
+    ### Getting Started:
+    1. Set up your OpenAI API key in `.env` file
+    2. Run: `streamlit run app.py`
+    3. Start with voice input or document upload
+    4. Organize your data into spreadsheets
+    5. Generate insights with visualizations
+    
+    Made with ☀️ for better financial management!
+    """)\n
