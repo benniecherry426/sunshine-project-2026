@@ -1,0 +1,10 @@
+streamlit
+openai
+python-dotenv
+pyttsx3
+SpeechRecognition
+PyPDF2
+pillow
+pandas
+openpyxl
+plotly
